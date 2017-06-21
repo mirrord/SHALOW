@@ -1,0 +1,6 @@
+- merge breed and population_generator into "creator" class to handle both
+- make Creator base template
+- abstract genetic method into Genetic class, use run(generations) method call instead of genetic(...)
+- make Genetic class remember some stuff about the generations run
+- make some Creator classes to serve common needs
+- compare runtime to DEAP
