@@ -9,7 +9,8 @@ if sys.version_info > (2,9): RANGE=range
 
 
 ############################## 
-
+# Example functions: Ones problem
+#
 def generate_member_basic(bounds):
     return [random.randint(a,b) for a, b in bounds]
 
@@ -27,59 +28,73 @@ def mutateBasic(guy, bounds):
     loc = random.randint(0, len(guy)-1)
     guy[loc] = random.randint(bounds[loc][0], bounds[loc][1])
     return guy
+################################ End example funcs
 
-def pass_init():
-    return None
+################################
+# Creater class
+#
 
-class breedTournamentBasic:
-    elitist = True
+class Creator(object):
 
-    def __init__(self, breed_func, mutation_func, mut_bounds, size=.10, mutation_rate=.05):
-        self.size = size
+    def __init__(self, breed_func, individual_generator, mutation_func, mutation_rate, bounds, elitism_rate=10, breedsize=10):
+        self.elitism = elitism_rate
         self.breed = breed_func
         self.mut_rate = mutation_rate
         self.mutate = mutation_func
-        self.bounds = mut_bounds
+        self.mutate_rate = mutation_rate
+        self.individual_generator = individual_generator
+        self.bounds = bounds
+        self.breeder_popsize = breedsize
 
-    def breed_generation(self, prev_gen_sorted):
-        top_some = prev_gen_sorted[:int(self.size*len(prev_gen_sorted))]
-        full_gen = []
-        for i in RANGE(len(top_some)):
-            for j in RANGE(i+1, len(top_some)):
-                newguy = self.breed(top_some[i], top_some[j])
+    # maybe overload this function
+    def createPopulation(self, size):
+        return [ self.individual_generator(self.bounds) for i in RANGE(size) ]
+
+    def isElitist():
+        return not self.elitism == 0
+
+    # overload this function
+    def breedPopulation(self, previous_generation, size):
+        new_generation = []
+        breedpop = int(size * self.breeder_popsize) if self.breeder_popsize < 1.0 else self.breeder_popsize
+        if not self.elitism == 0:
+            keepnum = int(len(previous_generation)*self.elitism) if self.elitism < 1.0 else self.elitism
+            new_generation.extend(previous_generation[:keepnum])
+
+        for i in RANGE(breedpop-1):
+            for j in RANGE(i+1, breedpop):
+                newguy = self.breed(previous_generation[i], previous_generation[j])
                 if random.random() < self.mut_rate: newguy = self.mutate(newguy, self.bounds)
-                #print "bred parents:"
-                #print str(top_some[i])
-                #print str(top_some[j])
-                #print "to child:"
-                #print str(newguy)
-                #time.sleep(1)
-                full_gen.append(newguy)
+                new_generation.append(newguy)
 
-        return full_gen
+        genlen = len(new_generation)
+        if genlen > size:
+            return new_generation[:size]
+        elif genlen < size:
+            for i in RANGE(genlen, size): new_generation.append(self.individual_generator(self.bounds))
+
+        return new_generation
+
+    # don't overload this
+    def getGeneration(self, previous_generation, gen_size):
+        if previous_generation:
+            return self.breedPopulation(previous_generation, gen_size)
+        return self.createPopulation(gen_size)
+
+
+class breedTournamentBasic(Creator):
+
+    def __init__(self, breed_func, individual_generator, mutation_func, mutation_rate, bounds):
+        super.__init__(breed_func, individual_generator, mutation_func, mutation_rate, bounds, 10, 10)
+
+
     
-############################### End example funcs
+###############################
+# Genetic Algo
+#
 
-def getGeneration(prev_gen_sorted, breed_scheme, gen_size, pop_generator, bounds):
-    if len(prev_gen_sorted) == 0:
-        return pop_generator(gen_size, bounds)
-
-    next_gen = []
-    if breed_scheme.elitist:
-        next_gen.extend(prev_gen_sorted[:int(breed_scheme.size*gen_size)])
-    
-    children = breed_scheme.breed_generation(prev_gen_sorted)
-    num_kids = len(children)
-    num_allowed_kids = gen_size-len(next_gen)
-    if num_kids > num_allowed_kids:
-        next_gen.extend(children[:num_allowed_kids])
-    else:
-        next_gen.extend(children)
-
-    next_gen.extend(pop_generator(gen_size - len(next_gen), bounds))
-        
-    return next_gen
-
+def pass_init():
+    return None
 
 def runPool(my_group, q, fitness, init=pass_init):
     ctx = init()
@@ -89,13 +104,12 @@ def runPool(my_group, q, fitness, init=pass_init):
     
 
 
-def genetic(generations, breed_scheme, gen_size, population_generator, fitness, num_processes=4):
+def genetic(generations, gen_size, creator, fitness, num_processes=4):
     prev_generation = []
     
     for i in RANGE(generations):
         # generate the new population
-        print "starting generation", i, "..."
-        gen_list = getGeneration(prev_generation, breed_scheme, gen_size, population_generator, breed_scheme.bounds)
+        gen_list = creator.getGeneration(prev_generation, gen_size)
         result_list = []
         
         results_q = Queue()
@@ -128,20 +142,16 @@ def genetic(generations, breed_scheme, gen_size, population_generator, fitness, 
         # do an in-place sort of the results
         gen_score_sorted = sorted(result_list, key=lambda tup: tup[1], reverse=True)
         prev_generation = [result[0] for result in gen_score_sorted]
-        print "generation", i, "complete..."
-        print prev_generation[0], gen_score_sorted[0][1]
+        #print prev_generation[0], gen_score_sorted[0][1]
 
     return prev_generation[0], gen_score_sorted[0][1]
 
 
 
-
-
 if __name__ == "__main__":
-    bounds = [(0,1),]*100
-    breeder = breedTournamentBasic(breedBasic, mutateBasic, bounds, mutation_rate=0.25)
-    breeder.elitist = False
-    winner = genetic(10, breeder, 10000, generate_rand_set_basic, ones_fitness)
+    bounds = [(0,1),]*1000
+    creator = Creator(breedBasic, generate_member_basic, mutateBasic, 0.05, bounds, 100, 100)
+    winner = genetic(10, 10000, creator, ones_fitness)
     print winner
 
 
